@@ -273,7 +273,7 @@ public:
 
 	struct Display {
 		Pixel* frameBuffer;
-		int xRex, yRes;
+		int xRes, yRes;
 	};
 
 	struct Material {
@@ -381,7 +381,12 @@ public:
 	Matrix ComputeModelMatrix(const Transformation& transform);
 	Vector3 MixColors(Vector3 color1, Vector3 color2, float blendFactor);
 
+	int FlushFrameBufferToPPM(std::string outputName);
+
+	//Constructor
+	Raytracer(int width, int height);
 private:
 	const float EPSILON = 0.00001f;
 	Scene* mScene = nullptr;
+	Display* mDisplay;
 };
