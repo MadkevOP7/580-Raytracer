@@ -2,65 +2,66 @@
 #include <iostream>
 #include "ExternalPlugins/json.hpp"
 #include <fstream>
-
-//For timing render duration
 #include <chrono> 
-/// <summary>
-/// For float comparison
-/// </summary>
-/// <param name="a"></param>
-/// <param name="b"></param>
-/// <returns></returns>
+
 bool Raytracer::NearlyEquals(float a, float b) {
 	return (std::abs(a - b) < EPSILON);
 }
 
-//TODO: For each shape compute model matrix
-/// <summary>
-/// Takes in a ray and computes intersection with scene, if has hit outputs closest hit with hit point in world space, distance and normal in hitInfo struct
-/// </summary>
-/// <param name="ray"></param>
-/// <param name="hitInfo"></param>
-/// <returns></returns>
-bool Raytracer::Raycast(Ray& ray, RaycastHitInfo& hitInfo) {
+bool Raytracer::Raycast(Ray& ray, RaycastHitInfo& hitInfo, int depth) {
+	if (depth > MAX_DEPTH) {
+		return false;
+	}
+
 	RaycastHitInfo closestHit;
 	bool hasFoundHit = false;
 	for (Shape& m : mScene->shapes) {
 		Mesh* mesh = mScene->meshMap[m.geometryId];
 
-		//Todo: Compute model matrix from the current shape's transformation
-		Matrix modelMatrix;
+		// Compute model matrix from the current shape's transformation
+		Matrix modelMatrix = ComputeModelMatrix(m.transforms);
 
 		for (Triangle& tri : mesh->triangles) {
 			RaycastHitInfo tempInfo;
 			if (RaycastTriangle(ray, tri, tempInfo, modelMatrix)) {
-				if (!hasFoundHit) {
+				if (!hasFoundHit || tempInfo.distance < closestHit.distance) {
 					hasFoundHit = true;
 					closestHit = tempInfo;
-				}
-				else {
-					if (tempInfo.distance < closestHit.distance) {
-						closestHit = tempInfo;
-					}
+					closestHit.material = m.material; // Store material for reflection calculations
 				}
 			}
 		}
 	}
 
 	if (!hasFoundHit) return false;
+
+	// Handle reflections
+	if (closestHit.material.reflective) {
+		Vector3 reflectionDir = Vector3::reflect(ray.direction, closestHit.normal);
+		reflectionDir.normalize();
+		Ray reflectionRay(closestHit.hitPoint + reflectionDir * EPSILON, reflectionDir);
+
+		RaycastHitInfo reflectionHit;
+		if (Raycast(reflectionRay, reflectionHit, depth + 1)) {
+			// Combine reflection color with the current hit color
+			closestHit.material.surfaceColor = MixColors(closestHit.material.surfaceColor, reflectionHit.material.surfaceColor,
+				closestHit.material.reflectionStrength);
+		}
+	}
+
 	hitInfo = closestHit;
 	return true;
 }
 
+Raytracer::Vector3 Raytracer::MixColors(Vector3 color1, Vector3 color2, float blendFactor) {
+	// Clamp blendFactor to the range [0, 1]
+	blendFactor = std::max(0.0f, std::min(1.0f, blendFactor));
 
-/// <summary>
-/// Möller–Trumbore intersection algorithm, given a ray and triangle, test intersection
-/// If successful intersection, outputs world space hit point and hit normal
-/// </summary>
-/// <param name="ray"></param>
-/// <param name="triangle"></param>
-/// <param name="hitInfo"></param>
-/// <returns></returns>
+	// Linearly interpolate between color1 and color2 based on blendFactor
+	return color1 * (1.0f - blendFactor) + color2 * blendFactor;
+}
+
+
 bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hitInfo, Matrix& modelMatrix) {
 	//Image a plane where the triangle lies on, the ray will intersect with the plane if the plane is in front of the ray
 	//Once intersection happens with the plane, we can then figure out if the intersection point is inside the triangle
@@ -177,6 +178,56 @@ int Raytracer::LoadMesh(const std::string meshName) {
 
 	mScene->meshMap[meshName] = mesh;
 	return RT_SUCCESS;
+}
+
+Raytracer::Matrix Raytracer::ComputeModelMatrix(const Raytracer::Transformation& transform) {
+
+	// Compute the transformation matrix for the shape
+	Matrix scaleMatrix = {{
+		{transform.scale.x, 0, 0, 0},
+		{0, transform.scale.y, 0, 0},
+		{0, 0, transform.scale.z, 0},
+		{0, 0, 0, 1}
+	}};
+
+	float cosX = cos(transform.rotation.x * M_PI / 180.0f);
+	float sinX = sin(transform.rotation.x * M_PI / 180.0f);
+	Matrix rotateXMatrix = { {
+		{1, 0, 0, 0},
+		{0, cosX, -sinX, 0},
+		{0, sinX, cosX, 0},
+		{0, 0, 0, 1}
+	}};
+
+	float cosY = cos(transform.rotation.y * M_PI / 180.0f);
+	float sinY = sin(transform.rotation.y * M_PI / 180.0f);
+	Matrix rotateYMatrix = { {
+		{cosY, 0, sinY, 0},
+		{0, 1, 0, 0},
+		{-sinY, 0, cosY, 0},
+		{0, 0, 0, 1}
+	}};
+
+	float cosZ = cos(transform.rotation.z * M_PI / 180.0f);
+	float sinZ = sin(transform.rotation.z * M_PI / 180.0f);
+	Matrix rotateZMatrix = { {
+		{cosZ, -sinZ, 0, 0},
+		{sinZ, cosZ, 0, 0},
+		{0, 0, 1, 0},
+		{0, 0, 0, 1}
+	}};
+
+	Matrix translationMatrix = { {
+		{1, 0, 0, transform.translation.x},
+		{0, 1, 0, transform.translation.y},
+		{0, 0, 1, transform.translation.z},
+		{0, 0, 0, 1}
+	}};
+
+	// Combine the transformations: Scale -> Rotate X -> Rotate Y -> Rotate Z -> Translate
+	Matrix modelMatrix = translationMatrix * (rotateZMatrix * (rotateYMatrix * (rotateXMatrix * scaleMatrix)));
+
+	return modelMatrix;
 }
 
 int Raytracer::LoadSceneJSON(const std::string scenePath) {

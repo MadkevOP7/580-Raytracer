@@ -6,6 +6,8 @@
 //Defines
 #define RT_SUCCESS      0
 #define RT_FAILURE      1
+#define MAX_DEPTH        5
+#define M_PI 3.1415
 
 const std::string ASSETS_PATH = "Assets/";
 
@@ -13,6 +15,24 @@ class Raytracer {
 
 	//State machine
 public:
+
+	struct Material;
+	struct Vector3;
+	struct Vector2;
+	struct Matrix;
+	struct Pixel;
+	struct Display;
+	struct RaycastHitInfo;
+	struct Ray;
+	struct Vertex;
+	struct Triangle;
+	struct Mesh;
+	struct Camera;
+	struct Light;
+	struct Transformation;
+	struct Shape;
+	struct Scene;
+
 	//Structures
 	struct Vector3 {
 		union {
@@ -256,15 +276,30 @@ public:
 		int xRex, yRes;
 	};
 
+	struct Material {
+		Vector3 surfaceColor;
+		float Ka;
+		float Kd;
+		float Ks;
+		float Kt;
+		float specularExponet;
+		std::string textureId;
+		bool reflective;  // Add a flag to indicate if the material is reflective
+		float reflectionStrength;  // Add a property for reflection strength
+	};
+
 	struct RaycastHitInfo {
 		Vector3 hitPoint;
 		Vector3 normal;
 		float distance;
+		Material material;
 	};
 
 	struct Ray {
-		Vector3 origin; //World space
-		Vector3 direction; //Normalized
+		Vector3 origin; // World space
+		Vector3 direction; // Normalized
+
+		Ray(const Vector3& o, const Vector3& d) : origin(o), direction(d) {}
 	};
 
 	struct Vertex {
@@ -312,17 +347,6 @@ public:
 		Vector3 translation;
 	};
 
-	struct Material {
-		Vector3 surfaceColor;
-		float Ka;
-		float Kd;
-		float Ks;
-		float Kt;
-		float specularExponet;
-		//For now no texture, just material color
-		std::string textureId;
-	};
-
 	struct Shape
 	{
 		std::string id;
@@ -346,7 +370,7 @@ public:
 
 	//This is the main function against the whole scene, but we will need some helper raycast
 	//Returns true if intersects with an object
-	bool Raycast(Ray& ray, RaycastHitInfo& hitInfo);
+	bool Raycast(Ray& ray, RaycastHitInfo& hitInfo, int depth);
 
 
 	//Helper ray cast functions
@@ -354,6 +378,9 @@ public:
 	bool RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hitInfo, Matrix& modelMatrix);
 	int LoadMesh(const std::string meshName);
 	int LoadSceneJSON(const std::string scenePath);
+	Matrix ComputeModelMatrix(const Transformation& transform);
+	Vector3 MixColors(Vector3 color1, Vector3 color2, float blendFactor);
+
 private:
 	const float EPSILON = 0.00001f;
 	Scene* mScene = nullptr;
