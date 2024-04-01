@@ -370,6 +370,7 @@ int Raytracer::FlushFrameBufferToPPM(std::string outputName) {
 		std::cout << "Failed to create output file: " << outputName << "\n";
 		return RT_FAILURE;
 	}
+	std::cout << "Writing to file: " << outputName << "\n";
 	// Write the PPM header
 	fprintf(outfile, "P3\n%d %d\n%d\n", mDisplay->xRes, mDisplay->yRes, 5333);
 
@@ -377,7 +378,7 @@ int Raytracer::FlushFrameBufferToPPM(std::string outputName) {
 		for (int x = 0; x < mDisplay->xRes; x++) {
 			// Accessing the pixel at (x, y)
 			Pixel pixel = mDisplay->frameBuffer[y * mDisplay->xRes + x];
-
+			std::cout << "Writing pixel at (" << x << ", " << y << "): " << pixel.r << ", " << pixel.g << ", " << pixel.b << "\n";
 			// Write the RGB values to the file
 			fprintf(outfile, "%d %d %d ", pixel.r, pixel.g, pixel.b);
 		}
@@ -397,6 +398,8 @@ int main() {
 	auto stopTime = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);
 	std::cout << "\Raytracer completed in " << duration.count() << " milliseconds.\n";
-
+	
+	// Write the PPM header
+	rt.FlushFrameBufferToPPM("output.ppm");
 	return 0;
 }
